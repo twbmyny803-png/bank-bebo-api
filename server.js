@@ -7,8 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// استبدل هذا الرابط برابط قاعدة البيانات عندك
-const DATABASE_URL = "PUT_DATABASE_URL_HERE";
+const DATABASE_URL = "postgresql://bebo_kyj2_user:HbrInXu38r7BMKgH1ij3Cyv6kjiAHW3Y@dpg-d6j9qgpr0fns73bjutf0-a.oregon-postgres.render.com/bebo_kyj2";
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
