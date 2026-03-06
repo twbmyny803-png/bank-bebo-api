@@ -7,8 +7,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// حط رابط قاعدة البيانات هنا
-const DATABASE_URL = "PUT_YOUR_DATABASE_URL_HERE";
+// رابط قاعدة البيانات
+const DATABASE_URL =
+  "postgresql://bebo_kyj2_user:HbrInXu38r7BMKgH1ij3Cyv6kjiAHW3Y@dpg-d6j9qgpr0fns73bjutf0-a.oregon-postgres.render.com/bebo_kyj2";
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -20,7 +21,7 @@ app.get("/", (req, res) => {
   res.send("bank-bebo-api running ✅");
 });
 
-// 1) إنشاء الجدول
+// إنشاء الجدول
 app.get("/init-db", async (req, res) => {
   try {
     await pool.query(`
@@ -40,7 +41,7 @@ app.get("/init-db", async (req, res) => {
   }
 });
 
-// 2) فتح حساب
+// فتح حساب جديد
 app.post("/create-account", async (req, res) => {
   const { username, password } = req.body || {};
 
@@ -51,16 +52,12 @@ app.post("/create-account", async (req, res) => {
     });
   }
 
-  const balance = 2000;
-
   try {
-    let accountNumber;
-    let inserted = false;
-    let row = null;
-
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // نحاول أكثر من مرة لو رقم الحساب اتكرر
+    let accountNumber;
+    let createdAccount = null;
+
     for (let i = 0; i < 10; i++) {
       accountNumber = Math.floor(1000000 + Math.random() * 9000000);
 
@@ -69,39 +66,37 @@ app.post("/create-account", async (req, res) => {
           `INSERT INTO accounts (account_number, username, password_hash, balance)
            VALUES ($1, $2, $3, $4)
            RETURNING id, account_number, username, balance, created_at`,
-          [accountNumber, username, passwordHash, balance]
+          [accountNumber, username, passwordHash, 2000]
         );
 
-        inserted = true;
-        row = r.rows[0];
+        createdAccount = r.rows[0];
         break;
       } catch (err) {
-        // لو الرقم اتكرر نجرب رقم جديد
         if (err.code !== "23505") throw err;
       }
     }
 
-    if (!inserted) {
+    if (!createdAccount) {
       return res.status(500).json({
         ok: false,
         error: "failed to generate unique account number",
       });
     }
 
-    res.json({ ok: true, account: row });
+    res.json({ ok: true, account: createdAccount });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// 3) جلب كل الحسابات
+// جلب كل الحسابات
 app.get("/accounts", async (req, res) => {
   try {
-    const r = await pool.query(
-      `SELECT id, account_number, username, balance, created_at
-       FROM accounts
-       ORDER BY id DESC`
-    );
+    const r = await pool.query(`
+      SELECT id, account_number, username, balance, created_at
+      FROM accounts
+      ORDER BY id DESC
+    `);
 
     res.json({ ok: true, accounts: r.rows });
   } catch (e) {
@@ -109,7 +104,7 @@ app.get("/accounts", async (req, res) => {
   }
 });
 
-// 4) جلب حساب واحد برقم الحساب
+// جلب حساب واحد برقم الحساب
 app.get("/account/:accountNumber", async (req, res) => {
   const { accountNumber } = req.params;
 
@@ -132,7 +127,7 @@ app.get("/account/:accountNumber", async (req, res) => {
   }
 });
 
-// 5) تعديل الاسم باستخدام id
+// تعديل الاسم باستخدام id
 app.put("/accounts/:id/username", async (req, res) => {
   const { id } = req.params;
   const { username } = req.body || {};
@@ -160,7 +155,7 @@ app.put("/accounts/:id/username", async (req, res) => {
   }
 });
 
-// 6) تعديل الرصيد باستخدام id
+// تعديل الرصيد باستخدام id
 app.put("/accounts/:id/balance", async (req, res) => {
   const { id } = req.params;
   const { amount } = req.body || {};
@@ -188,7 +183,7 @@ app.put("/accounts/:id/balance", async (req, res) => {
   }
 });
 
-// 7) تغيير كلمة السر باستخدام id
+// تغيير كلمة السر باستخدام id
 app.put("/accounts/:id/password", async (req, res) => {
   const { id } = req.params;
   const { newPassword } = req.body || {};
