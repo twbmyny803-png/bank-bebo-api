@@ -6,20 +6,22 @@ const bcrypt = require("bcryptjs");
 const app = express();
 app.use(cors());
 app.use(express.json());
+// رابط قاعدة البيانات
+app.use(express.json());
 
 // رابط قاعدة البيانات
-const DATABASE_URL =
-  "postgresql://bebo_kyj2_user:HbrInXu38r7BMKgH1ij3Cyv6kjiAHW3Y@dpg-d6j9qgpr0fns73bjutf0-a.oregon-postgres.render.com/bebo_kyj2";
+const DATABASE_URL = "postgresql://bebo_kyj2_user:HbrInXu38r7BMKgH1ij3Cyv6kjiAHW3Y@dpg-d6j9qgpr0fns73bjutf0-a.oregon-postgres.render.com/bebo_kyj2";
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }
 });
 
 // صفحة اختبار
 app.get("/", (req, res) => {
   res.send("bank-bebo-api running ✅");
 });
+
 
 // إنشاء الجدول
 app.get("/init-db", async (req, res) => {
