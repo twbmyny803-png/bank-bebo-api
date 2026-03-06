@@ -6,33 +6,29 @@ const bcrypt = require("bcryptjs");
 const app = express();
 app.use(cors());
 app.use(express.json());
-// رابط قاعدة البيانات
-app.use(express.json());
 
-// رابط قاعدة البيانات
-const DATABASE_URL = "postgresql://bebo_kyj2_user:HbrInXu38r7BMKgH1ij3Cyv6kjiAHW3Y@dpg-d6j9qgpr0fns73bjutf0-a.oregon-postgres.render.com/bebo_kyj2";
+// استبدل هذا الرابط برابط قاعدة البيانات عندك
+const DATABASE_URL = "PUT_DATABASE_URL_HERE";
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// صفحة اختبار
 app.get("/", (req, res) => {
-  res.send("bank-bebo-api running ✅");
+  res.send("demo-user-api running ✅");
 });
 
-
-// إنشاء الجدول
 app.get("/init-db", async (req, res) => {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS accounts (
+      CREATE TABLE IF NOT EXISTS users_demo (
         id SERIAL PRIMARY KEY,
-        account_number BIGINT UNIQUE NOT NULL,
+        member_number BIGINT UNIQUE NOT NULL,
         username TEXT NOT NULL,
         password_hash TEXT NOT NULL,
-        balance NUMERIC(12,2) NOT NULL DEFAULT 2000,
+        points NUMERIC(12,2) NOT NULL DEFAULT 2000,
+        status TEXT NOT NULL DEFAULT 'active',
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
@@ -43,95 +39,82 @@ app.get("/init-db", async (req, res) => {
   }
 });
 
-// فتح حساب جديد
-app.post("/create-account", async (req, res) => {
+app.post("/register", async (req, res) => {
   const { username, password } = req.body || {};
 
   if (!username || !password) {
-    return res.status(400).json({
-      ok: false,
-      error: "username & password required",
-    });
+    return res.status(400).json({ ok: false, error: "username and password required" });
   }
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-
-    let accountNumber;
-    let createdAccount = null;
+    let createdUser = null;
 
     for (let i = 0; i < 10; i++) {
-      accountNumber = Math.floor(1000000 + Math.random() * 9000000);
+      const memberNumber = Math.floor(1000000 + Math.random() * 9000000);
 
       try {
         const r = await pool.query(
-          `INSERT INTO accounts (account_number, username, password_hash, balance)
+          `INSERT INTO users_demo (member_number, username, password_hash, points)
            VALUES ($1, $2, $3, $4)
-           RETURNING id, account_number, username, balance, created_at`,
-          [accountNumber, username, passwordHash, 2000]
+           RETURNING id, member_number, username, points, status, created_at`,
+          [memberNumber, username, passwordHash, 2000]
         );
-
-        createdAccount = r.rows[0];
+        createdUser = r.rows[0];
         break;
       } catch (err) {
         if (err.code !== "23505") throw err;
       }
     }
 
-    if (!createdAccount) {
-      return res.status(500).json({
-        ok: false,
-        error: "failed to generate unique account number",
-      });
+    if (!createdUser) {
+      return res.status(500).json({ ok: false, error: "failed to generate unique member number" });
     }
 
-    res.json({ ok: true, account: createdAccount });
+    res.json({ ok: true, user: createdUser });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// جلب كل الحسابات
-app.get("/accounts", async (req, res) => {
+app.get("/users", async (req, res) => {
   try {
     const r = await pool.query(`
-      SELECT id, account_number, username, balance, created_at
-      FROM accounts
+      SELECT id, member_number, username, points, status, created_at
+      FROM users_demo
       ORDER BY id DESC
     `);
 
-    res.json({ ok: true, accounts: r.rows });
+    res.json({ ok: true, users: r.rows });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// جلب حساب واحد برقم الحساب
-app.get("/account/:accountNumber", async (req, res) => {
-  const { accountNumber } = req.params;
+app.get("/user/:memberNumber", async (req, res) => {
+  const { memberNumber } = req.params;
 
   try {
     const r = await pool.query(
-      `SELECT id, account_number, username, balance, created_at
-       FROM accounts
-       WHERE account_number = $1
+      `SELECT id, member_number, username, points, status, created_at
+       FROM users_demo
+       WHERE member_number = $1
        LIMIT 1`,
-      [accountNumber]
+      [memberNumber]
     );
 
     if (r.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: "account not found" });
+      return res.status(404).json({ ok: false, error: "user not found" });
     }
 
-    res.json({ ok: true, account: r.rows[0] });
+    res.json({ ok: true, user: r.rows[0] });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// تعديل الاسم باستخدام id
-app.put("/accounts/:id/username", async (req, res) => {
-  const { id } = req.params;
+app.put("/user/:memberNumber/username", async (req, res) => {
+  const { memberNumber } = req.params;
   const { username } = req.body || {};
 
   if (!username) {
@@ -140,54 +123,52 @@ app.put("/accounts/:id/username", async (req, res) => {
 
   try {
     const r = await pool.query(
-      `UPDATE accounts
+      `UPDATE users_demo
        SET username = $1
-       WHERE id = $2
-       RETURNING id, account_number, username, balance, created_at`,
-      [username, id]
+       WHERE member_number = $2
+       RETURNING id, member_number, username, points, status, created_at`,
+      [username, memberNumber]
     );
 
     if (r.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: "account not found" });
+      return res.status(404).json({ ok: false, error: "user not found" });
     }
 
-    res.json({ ok: true, account: r.rows[0] });
+    res.json({ ok: true, user: r.rows[0] });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// تعديل الرصيد باستخدام id
-app.put("/accounts/:id/balance", async (req, res) => {
-  const { id } = req.params;
+app.put("/user/:memberNumber/points", async (req, res) => {
+  const { memberNumber } = req.params;
   const { amount } = req.body || {};
 
   if (typeof amount !== "number") {
-    return res.status(400).json({ ok: false, error: "amount must be number" });
+    return res.status(400).json({ ok: false, error: "amount must be a number" });
   }
 
   try {
     const r = await pool.query(
-      `UPDATE accounts
-       SET balance = balance + $1
-       WHERE id = $2
-       RETURNING id, account_number, username, balance, created_at`,
-      [amount, id]
+      `UPDATE users_demo
+       SET points = points + $1
+       WHERE member_number = $2
+       RETURNING id, member_number, username, points, status, created_at`,
+      [amount, memberNumber]
     );
 
     if (r.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: "account not found" });
+      return res.status(404).json({ ok: false, error: "user not found" });
     }
 
-    res.json({ ok: true, account: r.rows[0] });
+    res.json({ ok: true, user: r.rows[0] });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// تغيير كلمة السر باستخدام id
-app.put("/accounts/:id/password", async (req, res) => {
-  const { id } = req.params;
+app.put("/user/:memberNumber/password", async (req, res) => {
+  const { memberNumber } = req.params;
   const { newPassword } = req.body || {};
 
   if (!newPassword) {
@@ -198,18 +179,66 @@ app.put("/accounts/:id/password", async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 10);
 
     const r = await pool.query(
-      `UPDATE accounts
+      `UPDATE users_demo
        SET password_hash = $1
-       WHERE id = $2
+       WHERE member_number = $2
        RETURNING id`,
-      [hash, id]
+      [hash, memberNumber]
     );
 
     if (r.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: "account not found" });
+      return res.status(404).json({ ok: false, error: "user not found" });
     }
 
     res.json({ ok: true, message: "Password updated ✅" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.put("/user/:memberNumber/status", async (req, res) => {
+  const { memberNumber } = req.params;
+  const { status } = req.body || {};
+
+  if (!status) {
+    return res.status(400).json({ ok: false, error: "status required" });
+  }
+
+  try {
+    const r = await pool.query(
+      `UPDATE users_demo
+       SET status = $1
+       WHERE member_number = $2
+       RETURNING id, member_number, username, points, status, created_at`,
+      [status, memberNumber]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "user not found" });
+    }
+
+    res.json({ ok: true, user: r.rows[0] });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete("/user/:memberNumber", async (req, res) => {
+  const { memberNumber } = req.params;
+
+  try {
+    const r = await pool.query(
+      `DELETE FROM users_demo
+       WHERE member_number = $1
+       RETURNING id`,
+      [memberNumber]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "user not found" });
+    }
+
+    res.json({ ok: true, message: "User deleted ✅" });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
